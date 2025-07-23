@@ -6,7 +6,7 @@ module circular_buffer_tb ();
 
     logic clk, rst, push_buffer, pop_buffer, read_buffer;
     warp_reg_t data_in, data_out;
-    logic overflow;
+    logic at_capacity;
 
     circular_buffer #(
         .size(8),
@@ -19,7 +19,7 @@ module circular_buffer_tb ();
         .read_buffer(read_buffer),
         .data_in(data_in),
         .data_out(data_out),
-        .overflow(overflow)
+        .at_capacity(at_capacity)
     );
     
     // Clock generator: toggles clk every 10 time units
@@ -76,8 +76,18 @@ module circular_buffer_tb ();
         #20;
         data_in = 8'h0C;
         #20;
+        pop_buffer = 1;
+        push_buffer = 0;
         data_in = 8'h0D;
         #20;
+        pop_buffer = 0;
+        push_buffer = 1;
+        #20;
+        pop_buffer = 1;
+        push_buffer = 0;
+        #180;
+
+        $finish;
 
 
 
