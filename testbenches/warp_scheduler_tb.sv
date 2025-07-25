@@ -35,7 +35,7 @@ module warp_scheduler_tb ();
         int i;
         rst = 1;
         launch_kernel = 0;
-        finished_warp_id = 4'b0000;
+        finished_warp_id = 4'b1111;
         for (i = 0; i < NUM_SIMD_CORES; i = i + 1) begin
             num_incoming_threads[i] = 0;
             starting_pc[i] = 0;
@@ -43,15 +43,19 @@ module warp_scheduler_tb ();
         #5; // Wait for a clock cycle
         rst = 0; // Release reset
         #15; //low
-        num_incoming_threads[0] = 4;
-        starting_pc[0] = 32'h1234_5678;
+        num_incoming_threads[0] = 4; // INPUT: 3/4 LOADED BUFFER.
+        starting_pc[0] = 32'hFFFF_FFFE;
         num_incoming_threads[1] = 2;
         starting_pc[1] = 32'h8765_4321;
         num_incoming_threads[2] = 7;
         starting_pc[2] = 32'hABCD_EF01;
         num_incoming_threads[3] = 0;
         starting_pc[3] = 32'h0000_0000;
-        #60; // Wait for a clock cycle to process the inputs
+        #60; // INPUT: 3/4 LOADED BUFFER.
+        launch_kernel = 1; // Launch kernel with the above parameters
+        #20; // Wait for the kernel to be processed
+        launch_kernel = 0;
+        #20; // Wait for the kernel to finish processing
 
 
         $finish;
