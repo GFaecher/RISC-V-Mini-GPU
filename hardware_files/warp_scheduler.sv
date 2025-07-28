@@ -15,7 +15,8 @@ module warp_scheduler (
     typedef enum logic [1:0] {
         LOADING_BUFFER = 2'b00,
         SENDING_KERNEL = 2'b01,
-        IDLE = 2'b10
+        IDLE = 2'b10,
+        PREPARING_KERNEL = 2'b11
     } state_t;
 
     typedef logic [31 + LOG2_THREAD_COUNT:0] warp_reg_t;
@@ -62,7 +63,7 @@ module warp_scheduler (
         open_warp_ids = 15'b000000000000000; // All warp IDs are initially available
         // is_finished = 0;
         // curr_state = IDLE;
-        next_state = LOADING_BUFFER;
+        // next_state = LOADING_BUFFER;
     end
 
 
@@ -76,6 +77,7 @@ module warp_scheduler (
             pop_buffer = 0;
             read_buffer = 0;
             data_in = '0;
+            valid_kernel = 0;
             is_finished_next = is_finished;
 
             if (!is_finished && i < NUM_SIMD_CORES && !at_capacity) begin
@@ -90,7 +92,7 @@ module warp_scheduler (
 
             // Assign next_state based on external flags only once
             if (launch_kernel) begin
-                next_state = SENDING_KERNEL;
+                next_state = PREPARING_KERNEL;
             end else if (at_capacity || is_finished_next) begin
                 next_state = IDLE;
             end else begin
@@ -99,26 +101,18 @@ module warp_scheduler (
         end
             
         SENDING_KERNEL: begin
-            pop_buffer <= 1;
-            push_buffer <= 0;
-            read_buffer <= 0;
-            valid_kernel <= 0;
-            kernel_out.thread_count = '0;
-            kernel_out.start_pc = '0;
-            kernel_out.warp_id = 4'b1111;
-            if (!is_empty) begin //TODO: THIS IS A CYCLE BEHING. IMPLEMENT LOGIC TO EITHER PREVENT THIS, OR ENSURE IT IS NOT A PROBLEM
-                valid_kernel <= 1;
+            if (!is_empty) begin
+                valid_kernel = 1;
                 kernel_out.thread_count = data_out[LOG2_THREAD_COUNT - 1:0];
                 kernel_out.start_pc = data_out[31 + LOG2_THREAD_COUNT:LOG2_THREAD_COUNT];
                 kernel_out.warp_id = find_warp_id(open_warp_ids);
-                open_warp_ids[kernel_out.warp_id] <= 1'b1; // Mark warp ID as used
+                open_warp_ids[kernel_out.warp_id] = 1'b1;
             end
-            if (launch_kernel) begin
-                next_state <= SENDING_KERNEL;
-            end else if (!is_finished) begin
-                next_state <= LOADING_BUFFER;
-            end else begin
-                next_state <= IDLE;
+            next_state = (launch_kernel) ? SENDING_KERNEL :
+                        (!is_finished) ? LOADING_BUFFER : IDLE;
+
+            if (next_state != SENDING_KERNEL) begin
+                pop_buffer = 0;
             end
         end
 
@@ -126,14 +120,31 @@ module warp_scheduler (
             push_buffer <= 0;
             pop_buffer <= 0;
             read_buffer <= 0;
+            valid_kernel <= 0;
             if (launch_kernel) begin
-                next_state <= SENDING_KERNEL;
+                next_state <= PREPARING_KERNEL;
             end else if (!is_finished) begin
                 next_state <= LOADING_BUFFER;
             end
             else begin
                 next_state <= IDLE;
             end
+        end
+
+        PREPARING_KERNEL: begin
+            push_buffer = 0;
+            pop_buffer = 0;
+            read_buffer = 0;
+            if (!is_empty) begin
+                pop_buffer = 1;
+                next_state = SENDING_KERNEL;
+            end else begin
+                next_state = IDLE;
+            end
+                valid_kernel = 0;
+                kernel_out.thread_count = '0;
+                kernel_out.start_pc = '0;
+                kernel_out.warp_id = 4'b1111;
         end
 
         endcase

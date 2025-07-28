@@ -49,13 +49,13 @@ module warp_scheduler_tb ();
         starting_pc[1] = 32'h8765_4321;
         num_incoming_threads[2] = 7;
         starting_pc[2] = 32'hABCD_EF01;
-        num_incoming_threads[3] = 0;
-        starting_pc[3] = 32'h0000_0000;
+        num_incoming_threads[3] = 3;
+        starting_pc[3] = 32'h1010_1010;
         #60; // INPUT: 3/4 LOADED BUFFER.
         launch_kernel = 1; // Launch kernel with the above parameters
         #20; // Wait for the kernel to be processed
         launch_kernel = 0;
-        #20; // Wait for the kernel to finish processing
+        #40; // Wait for the kernel to finish processing
 
 
         $finish;
