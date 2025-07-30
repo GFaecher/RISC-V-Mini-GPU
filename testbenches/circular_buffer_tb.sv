@@ -85,7 +85,7 @@ module circular_buffer_tb ();
         #20;
         pop_buffer = 1;
         push_buffer = 0;
-        #180;
+        #200;
 
         $finish;
 

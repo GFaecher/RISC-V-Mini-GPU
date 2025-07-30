@@ -46,7 +46,7 @@ module circular_buffer #(
                 end_ptr <= (end_ptr + 1) % size;
                 is_empty <= is_empty ? 0 : is_empty; // Could also be is_empty <= 0;
             end else begin
-                data_out <= 'hDEAD; // Buffer at_capacity
+                data_out <= 'h000; // Buffer at_capacity
             end
         end else if (pop_buffer && !push_buffer && !read_buffer) begin
             if (!is_empty) begin
@@ -55,13 +55,13 @@ module circular_buffer #(
                 buffer[beginning_ptr] <= '0; // Clear the popped data. NOT NECESSARY
                 is_empty <= (((beginning_ptr + 1) % size) == end_ptr);
             end else begin
-                data_out <= 'hDEAD; // No data to pop
+                data_out <= 'h000; // No data to pop
             end
         end else if (read_buffer && !push_buffer && !pop_buffer) begin
             if (!is_full && !is_empty) begin
                 data_out <= buffer[beginning_ptr];
             end else begin
-                data_out <= 'hDEAD; // No data to read
+                data_out <= 'h000; // No data to read
             end
         end
     end

@@ -30,12 +30,17 @@ module warp_scheduler (
 
     logic [14:0] open_warp_ids; // NOTE: 15 OPTIONS IS COMPLETELY ARBITRARY
 
-    logic [LOG2_SIMD_CORES - 1:0] i, next_i, first_item;
+    logic [LOG2_SIMD_CORES - 1:0] i;
 
+    logic [LOG2_THREAD_COUNT - 1:0] first_item;
 
     logic push_buffer, pop_buffer, read_buffer, at_capacity, is_empty;
 
     logic is_finished, is_finished_next;
+
+    logic [31:0] first_pc;
+
+    logic first_rst;
 
     circular_buffer #(
         .size(THREAD_COUNT), //ARBITRARY SIZE. 8
@@ -52,30 +57,11 @@ module warp_scheduler (
         .is_empty(is_empty)
     );
 
-    initial begin
-        // valid_kernel = 0;
-        // kernel_out.thread_count = '0;
-        // kernel_out.start_pc = '0;
-        // kernel_out.warp_id = 4'b1111; // THE INVALID WARP ID
-        // read_buffer = 0;
-        // push_buffer = 0;
-        // pop_buffer = 0;
-        open_warp_ids = 15'b000000000000000; // All warp IDs are initially available
-        // is_finished = 0;
-        // curr_state = IDLE;
-        // next_state = LOADING_BUFFER;
-    end
-
-
-
     always_comb begin
 
         case (curr_state)
 
         LOADING_BUFFER: begin
-            push_buffer = 0;
-            pop_buffer = 0;
-            read_buffer = 0;
             data_in = '0;
             valid_kernel = 0;
             is_finished_next = is_finished;
@@ -83,7 +69,6 @@ module warp_scheduler (
             if (!is_finished && i < NUM_SIMD_CORES && !at_capacity) begin
                 if (num_incoming_threads[i] > 0) begin
                     data_in = {starting_pc[i], num_incoming_threads[i]};
-                    push_buffer = 1;
                 end else begin
                     // First zero encountered: mark done
                     is_finished_next = 1;
@@ -92,59 +77,68 @@ module warp_scheduler (
 
             // Assign next_state based on external flags only once
             if (launch_kernel) begin
-                next_state = PREPARING_KERNEL;
+                next_state = SENDING_KERNEL;
+                push_buffer = 0; // Stop pushing when not in LOADING_BUFFER state
+                pop_buffer = 1; // Prepare to pop data for sending
+                read_buffer = 0; // Ensure read_buffer is not active in SENDING_KERNEL state
             end else if (at_capacity || is_finished_next) begin
                 next_state = IDLE;
+                push_buffer = 0; // Ensure push_buffer is not active in other states
+                pop_buffer = 0; // Ensure pop_buffer is not active in other states
+                read_buffer = 0; // Ensure read_buffer is not active in other states
             end else begin
                 next_state = LOADING_BUFFER;
+                push_buffer = 1;
+                pop_buffer = 0; // Ensure pop_buffer is not active in LOADING_BUFFER state
+                read_buffer = 0; // Ensure read_buffer is not active in LOADING_BUFFER state
             end
         end
             
         SENDING_KERNEL: begin
-            if (!is_empty) begin
+            valid_kernel = 0;
+            if (launch_kernel && (data_out[LOG2_THREAD_COUNT - 1:0] != '0)) begin
                 valid_kernel = 1;
                 kernel_out.thread_count = data_out[LOG2_THREAD_COUNT - 1:0];
                 kernel_out.start_pc = data_out[31 + LOG2_THREAD_COUNT:LOG2_THREAD_COUNT];
                 kernel_out.warp_id = find_warp_id(open_warp_ids);
                 open_warp_ids[kernel_out.warp_id] = 1'b1;
             end
-            next_state = (launch_kernel) ? SENDING_KERNEL :
-                        (!is_finished) ? LOADING_BUFFER : IDLE;
-
-            if (next_state != SENDING_KERNEL) begin
-                pop_buffer = 0;
+            if (launch_kernel) begin
+                next_state = SENDING_KERNEL;
+                push_buffer = 0; // Stop pushing when not in LOADING_BUFFER state
+                pop_buffer = 1; // Prepare to pop data for sending
+                read_buffer = 0; // Ensure read_buffer is not active in SENDING_KERNEL state
+            end else if (at_capacity || is_finished_next) begin
+                next_state = IDLE;
+                push_buffer = 0; // Ensure push_buffer is not active in other states
+                pop_buffer = 0; // Ensure pop_buffer is not active in other states
+                read_buffer = 0; // Ensure read_buffer is not active in other states
+            end else begin
+                next_state = LOADING_BUFFER;
+                push_buffer = 1;
+                pop_buffer = 0; // Ensure pop_buffer is not active in LOADING_BUFFER state
+                read_buffer = 0; // Ensure read_buffer is not active in LOADING_BUFFER state
             end
         end
 
         IDLE: begin
-            push_buffer <= 0;
-            pop_buffer <= 0;
-            read_buffer <= 0;
-            valid_kernel <= 0;
+            valid_kernel = 0;
             if (launch_kernel) begin
-                next_state <= PREPARING_KERNEL;
-            end else if (!is_finished) begin
-                next_state <= LOADING_BUFFER;
-            end
-            else begin
-                next_state <= IDLE;
-            end
-        end
-
-        PREPARING_KERNEL: begin
-            push_buffer = 0;
-            pop_buffer = 0;
-            read_buffer = 0;
-            if (!is_empty) begin
-                pop_buffer = 1;
                 next_state = SENDING_KERNEL;
-            end else begin
+                push_buffer = 0; // Stop pushing when not in LOADING_BUFFER state
+                pop_buffer = 1; // Prepare to pop data for sending
+                read_buffer = 0; // Ensure read_buffer is not active in SENDING_KERNEL state
+            end else if (at_capacity || is_finished_next) begin
                 next_state = IDLE;
+                push_buffer = 0; // Ensure push_buffer is not active in other states
+                pop_buffer = 0; // Ensure pop_buffer is not active in other states
+                read_buffer = 0; // Ensure read_buffer is not active in other states
+            end else begin
+                next_state = LOADING_BUFFER;
+                push_buffer = 1;
+                pop_buffer = 0; // Ensure pop_buffer is not active in LOADING_BUFFER state
+                read_buffer = 0; // Ensure read_buffer is not active in LOADING_BUFFER state
             end
-                valid_kernel = 0;
-                kernel_out.thread_count = '0;
-                kernel_out.start_pc = '0;
-                kernel_out.warp_id = 4'b1111;
         end
 
         endcase
@@ -152,6 +146,14 @@ module warp_scheduler (
         if (finished_warp_id != 4'b1111) begin
                 open_warp_ids[finished_warp_id] <= 1'b0; // Mark warp ID as available
         end
+
+        if ((i < (NUM_SIMD_CORES - 1) && !at_capacity && num_incoming_threads[i] > 0) ||
+        (num_incoming_threads[0] != first_item || starting_pc[0] != first_pc)) begin
+            is_finished_next = 0;
+        end else begin
+            is_finished_next = 1;
+        end
+
     end
 
 
@@ -172,53 +174,34 @@ module warp_scheduler (
             push_buffer <= 0;
             pop_buffer <= 0;
             read_buffer <= 0;
+            first_rst <= 1;
 
         end else begin
 
-            if (num_incoming_threads[0] !== first_item) begin
-                is_finished <= 0; // Reset is_finished when element 0 changes
-            end
-            if (is_finished) begin
-                i <= 0;
-            end else if (next_state == LOADING_BUFFER) begin
-                i <= i + 1;
+            if ((num_incoming_threads[0] != first_item || 
+                starting_pc[0] != first_pc) && !first_rst) begin
+                i <= 0; // Reset i when transitioning into LOADING_BUFFER
+            end else if (!is_finished && curr_state == LOADING_BUFFER) begin
+                i <= (i == (NUM_SIMD_CORES - 1)) ? i : i + 1;
             end else begin
-                i <= i; // Maintain current index if not loading buffer
+                i <= i; // Maintain current index
             end
-
+            first_rst <= rst;
             is_finished <= is_finished_next;
             first_item <= num_incoming_threads[0];
+            first_pc <= starting_pc[0];
             curr_state <= next_state;
         end
         
     end
 
-    function logic find_warp_id(input logic [14:0] open_warp_ids);
-
-        case (open_warp_ids)
-
-            !(15'b000000000000001 & open_warp_ids): return 4'b0000;
-            !(15'b000000000000010 & open_warp_ids): return 4'b0001;
-            !(15'b000000000000100 & open_warp_ids): return 4'b0010;
-            !(15'b000000000001000 & open_warp_ids): return 4'b0011;
-            !(15'b000000000010000 & open_warp_ids): return 4'b0100;
-            !(15'b000000000100000 & open_warp_ids): return 4'b0101;
-            !(15'b000000001000000 & open_warp_ids): return 4'b0110;
-            !(15'b000000010000000 & open_warp_ids): return 4'b0111;
-            !(15'b000000100000000 & open_warp_ids): return 4'b1000;
-            !(15'b000001000000000 & open_warp_ids): return 4'b1001;
-            !(15'b000010000000000 & open_warp_ids): return 4'b1010;
-            !(15'b000100000000000 & open_warp_ids): return 4'b1011;
-            !(15'b001000000000000 & open_warp_ids): return 4'b1100;
-            !(15'b010000000000000 & open_warp_ids): return 4'b1101;
-            !(15'b100000000000000 & open_warp_ids): return 4'b1110;
-            default: return 4'b1111; // No available warp ID
-
-        endcase
-
-        return 4'b1111; // Default case if no warp ID is found
-        
+    function logic [3:0] find_warp_id(input logic [14:0] open_warp_ids);
+        for (int i = 0; i < 15; i++) begin
+            if (!open_warp_ids[i]) begin
+                return i[3:0];
+            end
+        end
+        return 4'b1111; // No available warp ID
     endfunction
 
 endmodule
-
