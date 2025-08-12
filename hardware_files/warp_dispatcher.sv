@@ -6,7 +6,6 @@ module warp_dispatcher (
     input kernel_t kernel_in,
     input logic valid_kernel,
     input logic [LOG2_SIMD_CORES - 1:0] freed_simd_core, // INDICATES WHICH SIMD CORES ARE AVAILABLE
-    input logic is_simd_free,
 
     output logic [LOG2_SIMD_CORES - 1:0] simd_core_id, // INDICATES WHICH SIMD CORES THIS KERNEL IS HEADING 
     output kernel_t kernel_out
