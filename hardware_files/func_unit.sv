@@ -1,10 +1,6 @@
 module func_unit (
     input logic clk,
     input logic rst,
-    input logic [31:0] starting_pc,
-
-    input logic [31:0] init_mem_addr,
-    input logic [31:0] init_reg_data [0:31],
 
     input logic [2:0] type_instruction,
     input logic [4:0] regnum_1,
@@ -12,26 +8,26 @@ module func_unit (
     input logic [4:0] dest_reg,
     input logic [5:0] shammt,
 
-    output logic read_reg_mem_data,
+    input logic [31:0] init_reg_data [0:31], // INITIAL DATA FOR THE REGISTER FILE
+
     output logic [31:0] final_result,
     output logic thread_complete,
-    output logic valid_output
 );
 
-    typedef enum logic {INIT_LOAD = 1'b0, EXECUTE = 1'b1} state_t;
-    state_t curr_state, next_state;
+    logic [31:0] register_file [0:31]; // 32 registers, each 32 bits wide
 
-
-    logic [31:0] register_file [0:31];
-
+    logic [31:0] alu_in1, alu_in2;
+    logic [31:0] int_result;
+    logic [31:0] float_result;
     logic adder_cin;
-    logic [31:0] alu_in1, alu_in2, int_result, float_result;
 
-    logic [31:0] prev_starting_pc;
-    logic need_init;
-    logic finished_init;
+    fl32 floating_point_unit (
+        .in_0(alu_in1),
+        .in_1(alu_in2),
+        .out(float_result)
+    );
 
-    add adder (
+    add #(.WIDTH(32)) integer_adder (
         .in0(alu_in1),
         .in1(alu_in2),
         .cin(adder_cin),
@@ -39,156 +35,76 @@ module func_unit (
         .cout()
     );
 
-    fl32 floating_point_unit (
-        .in0(alu_in1),
-        .in1(alu_in2),
-        .out(float_result)
-    );
-
-
-    /* LOGIC TO DETECT NEW INPUT */
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            prev_starting_pc <= 32'h0;
-        end else begin
-            prev_starting_pc <= starting_pc;
-        end
-    end
-    assign need_init = ((prev_starting_pc != starting_pc) && thread_complete);
-
-
-    /* STATE TRANSITION LOGIC */
-    always_comb begin
-        next_state = curr_state;
-        case (curr_state)
-            INIT_LOAD: begin
-                finished_init = 1;
-                thread_complete = 0;
-                for (int i = 0; i < 32; i = i + 1) begin
-                    if (register_file[i] != init_reg_data[i]) begin
-                        finished_init = 0;
-                    end
-                end
-                if (finished_init)
-                    next_state = EXECUTE;
-                else
-                    next_state = INIT_LOAD;
-            end
-            EXECUTE: begin
-                next_state = need_init ? INIT_LOAD : EXECUTE;
-                
-            end
-            default: next_state = INIT_LOAD;
-        endcase
-    end
-
-    /* UPDATE STATE LOGIC */
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin
-            curr_state <= INIT_LOAD;
-            for (int i = 0; i < 32; i++) register_file[i] <= 32'b0;
-            thread_complete <= 1;
-            valid_output <= 0;
             final_result <= 32'b0;
-        end else begin
-            curr_state <= next_state;
-        end
-    end
-
-    /* REGISTER FILE LOGIC */
-    always_ff @(posedge clk or posedge rst) begin
-        if (rst) begin
-            for (int i = 0; i < 32; i++) begin
-                register_file[i] <= 32'h0;
+            thread_complete <= 1'b1;
+            for (int i = 0; i < 32; i = i + 1) begin
+                register_file[i] <= 32'b0; // Initialize registers to zero on reset
             end
-            final_result <= 32'h0;
-            final_valid  <= 1'b0;
-            thread_complete <= 1'b0;
         end else begin
-            final_valid <= 1'b0;
-            thread_complete <= 1'b0;
-            if (curr_state == INIT_LOAD) begin
-                for (int i = 0; i < 32; i++) begin
-                        register_file[i] <= init_mem_block[i];
+            if (type_instruciton == 3'b110) begin
+                for (int i = 0; i < 32; i = i + 1) begin
+                    register_file[i] <= init_reg_data[i];
                 end
+                thread_complete <= 1'b0;
+            end else if (type_instruction == 3'b111) begin
+                thread_complete <= 1'b1;
             end else begin
-                read_reg_mem_data = 1'b1
-                if (type_instruction != 3'b111) begin
-                    register_file[dest_reg] <= final_result;
-                end
+                register_file[dest_reg] <= final_result; // Write result to destination register
+                thread_complete <= 1'b0;
             end
         end
     end
 
 
-    /* EXECUTE ALU LOGIC */
     always_comb begin
-        if (curr_state == EXECUTE) begin
-            read_reg_mem_data = 1'b0;
-            case (type_instruction)
 
-                3'b000: begin // ADD
-                    alu_in1 = register_file[regnum_1];
-                    alu_in2 = register_file[regnum_2];
-                    final_result = int_result;
-                    adder_cin = 1'b0; // No carry-in for addition
-                    valid_output = 1'b1;
-                    thread_complete = 1'b0;
-                end;
+        alu_in1 = register_file[regnum_1];
+        alu_in2 = register_file[regnum_2];
 
-                3'b001: begin // SUB
-                    alu_in1 = register_file[regnum_1];
-                    alu_in2 = ~(register_file[regnum_2]);
-                    final_result = int_result;
-                    adder_cin = 1'b1;
-                    final_result = alu_in1 - alu_in2;
-                end;
+        case (type_instruction)
 
-                3'b010: begin // MUL
-                    alu_in1 = register_file[regnum_1];
-                    alu_in2 = register_file[regnum_2];
-                    final_result = alu_in1 * alu_in2; // IN FUTURE ITERATIONS, CREATE AND USE A MULTIPLIER MODULE
-                    valid_output = 1'b1;
-                    thread_complete = 1'b0;
-                end;
+            3'b000: begin // ADD
+                final_result = int_result;
+                adder_cin = 1'b0; // No carry-in for addition
+            end;
 
-                3'b011: begin // UDIV
-                    alu_in1 = register_file[regnum_1];
-                    alu_in2 = register_file[regnum_2];
-                    final_result = int_result;
-                    if (alu_in2 != 0) begin
-                        final_result = alu_in1 / alu_in2; // IN FUTURE ITERATIONS, CREATE AND USE A DIVIDER MODULE
-                    end else begin
-                        final_result = 32'hFFFFFFFF; // Handle division by zero
-                    end
-                    valid_output = 1'b1;
-                    thread_complete = 1'b0;
-                end;
+            3'b001: begin // SUB
+                alu_in2 = ~alu_in2; // Two's complement for subtraction
+                final_result = int_result;
+                adder_cin = 1'b1;
+            end;
 
-                3'b100: begin // FADD
-                    alu_in1 = register_file[regnum_1];
-                    alu_in2 = register_file[regnum_2];
-                    final_result = float_result;
-                    valid_output = 1'b1;
-                    thread_complete = 1'b0;
-                end;
+            3'b010: begin // MUL
+                final_result = alu_in1 * alu_in2; // IN FUTURE ITERATIONS, CREATE AND USE A MULTIPLIER MODULE
+            end;
 
-                3'b101: begin // FSUB
-                    alu_in1 = register_file[regnum_1];
-                    alu_in2 = register_file[regnum_2];
-                    alu_in2[31] = ~alu_in2[31];
-                    final_result = float_result;
-                    valid_output = 1'b1;
-                    thread_complete = 1'b0;
-                end;
+            3'b011: begin // UDIV
+                if (alu_in2 != 0) begin
+                    final_result = alu_in1 / alu_in2; // IN FUTURE ITERATIONS, CREATE AND USE A DIVIDER MODULE
+                end else begin
+                    final_result = 32'hFFFFFFFF; // Handle division by zero
+                end
+            end;
 
-                3'b111: begin
-                    thread_complete = 1'b1;
-                    final_result = 32'b0;
-                    valid_output = 1'b0;
-                end   
-            endcase  
-        end
+            3'b100: begin // FADD
+                final_result = float_result;
+            end;
+
+            3'b101: begin // FSUB
+                alu_in2[31] = ~alu_in2[31];
+                final_result = float_result;
+            end;
+
+            3'b110: begin
+                final_result = 32'b0; // LOAD INSTRUCTION, NO OPERATION HERE
+            end;
+
+            3'b111: begin // RETURN INSTRUCTION. HANDLED IN SEQUENTIAL BLOCK
+                final_result = 32'b0;
+            end   
+        endcase  
     end
 
 endmodule

@@ -8,7 +8,8 @@ module simd_decoder (
     output [4:0] regnum_2,
     output [4:0] dest_reg,
     // output [11:0] immediate, IN FUTURE VERSIONS, INCLUDE IMMEDIATE INSTRUCTIONS
-    output [5:0] shammt
+    output [5:0] shammt,
+    output [8:0] address
 
 );
 
@@ -26,6 +27,8 @@ module simd_decoder (
             type_instruction = 3'b100; // FADD instruction
         end else if (instruction[31:21] == 11'b00011110011 && instruction[15:10] == 6'b001110) begin
             type_instruction = 3'b101; // FSUB instruction
+        end else if (instruction[31:21] == 11'b10101010101) begin // IN FUTURE, LOOK AT BITS [20:12] FOR ADDRESS
+            type_instruction = 3'b110; // SPECIAL LOAD INSTRUCTION
         end else begin
             type_instruction = 3'b111; // Return Instruction
         end
@@ -34,6 +37,7 @@ module simd_decoder (
         regnum_1 = instruction[9:5];
         regnum_2 = instruction[20:16];
         shammt = instruction[15:10]; // Extracting the shift amount. USEFUL FOR LSL INSTRUCTIONS
+        address = instruction[20:12]; // Extracting the address for load instructions
 
     end
 

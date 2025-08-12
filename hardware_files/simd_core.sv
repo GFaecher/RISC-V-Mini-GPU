@@ -5,31 +5,56 @@ module simd_core (
     input clk,
     input rst,
     input kernel_t kernel_in,
-    input [31:0] instruction_from_imem, // COMES FROM SEPARATE IMEM. AKA ME IN TESTBENCH
-    input [31:0] init_reg_data [0:31] [0:THREAD_COUNT-1], // REGISTER INITIALIZATION DATA. AKA ME FROM TESTBENCH
+    input [31:0] instruction_from_imem, // COMES FROM SEPARATE IMEM. AKA ME IN TESTBENCH. TOP LEVEL INPUT
+    input [31:0] init_reg_data [0:31] [0:THREAD_COUNT-1], // REGISTER INITIALIZATION DATA. AKA ME FROM TESTBENCH TOP LEVEL INPUT
 
     output is_finished_out,
-    output [31:0] result_out [0:THREAD_COUNT-1],
-    output [31:0] pc_out_to_imem,
-    output [3:0] finished_warp_id,
-    output valid_instruction_out [0:THREAD_COUNT-1] // VALID INSTRUCTION FOR EACH THREAD
+    output [31:0] result_out [0:THREAD_COUNT-1], // TOP LEVEL OUTPUT
+    output [31:0] instruction_fetch, // TOP LEVEL OUTPUT
+    output [31:0] init_reg_data_fetch, // TOP LEVEL OUTPUT
+    output [3:0] finished_warp_id
 );
 
+    logic stall;
     logic [2:0] type_instruction;
     logic [4:0] regnum_1, regnum_2, dest_reg;
     logic [5:0] shammt;
+    logic [8:0] address;
     logic thread_complete [0:THREAD_COUNT-1];
     logic [31:0] first_instruction;
-    logic [31:0] pc_offset;
+    logic [31:0] pc_offset, address_out;
 
+    assign address_out = {23'b0, address};
 
-    always_ff @(posedge clk or posedge rst) begin // BASIC FETCHER
+    always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            pc_out_to_imem <= 32'b0;
-            valid_instruction_out <= 1'b0;
+            is_finished_out <= 1'b1;
+            instruction_fetch <= 32'b0;
+            finished_warp_id <= 4'b1111; // Indicating no warp finished
+            stall <= 1'b0;
+            pc_offset <= 32'b0;
+            for (int i = 0; i < THREAD_COUNT; i = i + 1) begin
+                result_out[i] <= 32'b0;
+                thread_complete[i] <= 1'b1; // Assume all threads are complete on reset
+            end
         end else begin
-            // Fetch the instruction from the kernel
-            pc_out_to_imem <= kernel_in.start_pc;
+            if (&thread_complete) begin
+                is_finished_out <= 1'b1;
+                finished_warp_id <= kernel_in.warp_id;
+            end else begin
+                is_finished_out <= 1'b0;
+                finished_warp_id <= 4'b1111; // Indicating no warp finished
+                if (stall) begin
+                    stall <= 1'b0;
+                end else if (type_instruction == 3'b110) begin
+                    stall <= 1'b1;
+                    init_reg_data_fetch <= address_out; 
+                end else begin
+                    // Fetch the instruction from the kernel
+                    instruction_fetch <= kernel_in.start_pc + pc_offset;
+                    pc_offset <= pc_offset + 4;
+                end
+            end
         end
     end
 
@@ -39,7 +64,8 @@ module simd_core (
         .regnum_1(regnum_1),
         .regnum_2(regnum_2),
         .dest_reg(dest_reg),
-        .shammt(shammt)
+        .shammt(shammt),
+        .address(address)
     );
 
     genvar i;
@@ -48,32 +74,16 @@ module simd_core (
             func_unit func_unit_inst (
                 .clk(clk),
                 .rst(rst),
-                .starting_pc(kernel_in.start_pc),
-                .init_mem_addr(kernel_in.start_pc), // COULD BE CHANGED IN FUTURE
-                .init_reg_data(init_reg_data[i]),
                 .type_instruction(type_instruction),
                 .regnum_1(regnum_1),
                 .regnum_2(regnum_2),
                 .dest_reg(dest_reg),
                 .shammt(shammt),
-                .read_reg_mem_data(thread_complete[i]),
+                .init_reg_data(init_reg_data[:, i]),
                 .final_result(result_out[i]),
-                .thread_complete(thread_complete[i]),
-                .valid_output(valid_instruction_out[i])
+                .thread_complete(thread_complete[i])
             );
         end
     endgenerate
 
-    always_comb begin
-        is_finished_out = 1'b0;
-        finished_warp_id = 5'b0;
-
-        if (&thread_complete) begin
-            is_finished_out = 1'b1;
-            finished_warp_id = kernel_in.warp_id;
-        end else begin
-            is_finished_out = 1'b0;
-            finished_warp_id = 4'b1111; // Indicating no warp finished
-        end
-    end
 endmodule
