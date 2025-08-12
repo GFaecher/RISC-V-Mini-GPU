@@ -4,7 +4,7 @@ module func_unit (
     input logic [31:0] starting_pc,
 
     input logic [31:0] init_mem_addr,
-    input logic [31:0] init_reg_data [0:31], // INPUT FROM MEMORY. AKA ME FROM TESTBENCH
+    input logic [31:0] init_reg_data [0:31],
 
     input logic [2:0] type_instruction,
     input logic [4:0] regnum_1,
@@ -86,113 +86,109 @@ module func_unit (
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
             curr_state <= INIT_LOAD;
+            for (int i = 0; i < 32; i++) register_file[i] <= 32'b0;
+            thread_complete <= 1;
+            valid_output <= 0;
+            final_result <= 32'b0;
         end else begin
             curr_state <= next_state;
         end
     end
 
-    /* EXECUTE STATE LOGIC */
-    always_comb begin
-
-        case (curr_state)
-
-            INIT_LOAD: begin
-                read_reg_mem_data = 1'b1;
-                valid_output = 1'b0;
-                thread_complete = 1'b0;
-                result = 32'b0;
-                for (int i = 0; i < 32; i = i + 1) begin
-                    register_file[i] = init_reg_data[i];
+    /* REGISTER FILE LOGIC */
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            for (int i = 0; i < 32; i++) begin
+                register_file[i] <= 32'h0;
+            end
+            final_result <= 32'h0;
+            final_valid  <= 1'b0;
+            thread_complete <= 1'b0;
+        end else begin
+            final_valid <= 1'b0;
+            thread_complete <= 1'b0;
+            if (curr_state == INIT_LOAD) begin
+                for (int i = 0; i < 32; i++) begin
+                        register_file[i] <= init_mem_block[i];
+                end
+            end else begin
+                read_reg_mem_data = 1'b1
+                if (type_instruction != 3'b111) begin
+                    register_file[dest_reg] <= final_result;
                 end
             end
-
-            EXECUTE: begin
-
-                read_reg_mem_data = 1'b0;
-
-                case (type_instruction)
-
-                    3'b000: begin // ADD
-                        alu_in1 = register_file[regnum_1];
-                        alu_in2 = register_file[regnum_2];
-                        final_result = int_result;
-                        adder_cin = 1'b0; // No carry-in for addition
-                        valid_output = 1'b1;
-                        thread_complete = 1'b0;
-                    end;
-
-                    3'b001: begin // SUB
-                        alu_in1 = register_file[regnum_1];
-                        alu_in2 = ~(register_file[regnum_2]);
-                        final_result = int_result;
-                        adder_cin = 1'b1;
-                        final_result = alu_in1 - alu_in2;
-                    end;
-
-                    3'b010: begin // MUL
-                        alu_in1 = register_file[regnum_1];
-                        alu_in2 = register_file[regnum_2];
-                        final_result = int_result;
-                        final_result = alu_in1 * alu_in2; // IN FUTURE ITERATIONS, CREATE AND USE A MULTIPLIER MODULE
-                        valid_output = 1'b1;
-                        thread_complete = 1'b0;
-                    end;
-
-                    3'b011: begin // UDIV
-                        alu_in1 = register_file[regnum_1];
-                        alu_in2 = register_file[regnum_2];
-                        final_result = int_result;
-                        if (alu_in2 != 0) begin
-                            final_result = alu_in1 / alu_in2; // IN FUTURE ITERATIONS, CREATE AND USE A DIVIDER MODULE
-                        end else begin
-                            final_result = 32'hFFFFFFFF; // Handle division by zero
-                        end
-                        valid_output = 1'b1;
-                        thread_complete = 1'b0;
-                    end;
-
-                    3'b100: begin // FADD
-                        alu_in1 = register_file[regnum_1];
-                        alu_in2 = register_file[regnum_2];
-                        final_result = float_result;
-                        valid_output = 1'b1;
-                        thread_complete = 1'b0;
-                    end;
-
-                    3'b101: begin // FSUB
-                        alu_in1 = register_file[regnum_1];
-                        alu_in2 = register_file[regnum_2];
-                        final_result = float_result;
-                        alu_in2[31] = ~alu_in2[31];
-                        valid_output = 1'b1;
-                        thread_complete = 1'b0;
-                    end;
-
-                    3'b111: begin
-                        thread_complete = 1'b1;
-                        final_result = 32'b0;
-                        valid_output = 1'b0;
-                    end   
-                endcase  
-            end
-
-            default: begin
-                read_reg_mem_data = 1'b0;
-                valid_output = 1'b0;
-                thread_complete = 1'b0;
-                result = 32'b0;
-            end
-        endcase
+        end
     end
 
-    /* RESET ALL INTERNAL SIGNALS */
-    always_ff @(posedge rst) begin
-        for (int i = 0; i < 32; i = i + 1) begin
-            register_file[i] <= 32'b0;
+
+    /* EXECUTE ALU LOGIC */
+    always_comb begin
+        if (curr_state == EXECUTE) begin
+            read_reg_mem_data = 1'b0;
+            case (type_instruction)
+
+                3'b000: begin // ADD
+                    alu_in1 = register_file[regnum_1];
+                    alu_in2 = register_file[regnum_2];
+                    final_result = int_result;
+                    adder_cin = 1'b0; // No carry-in for addition
+                    valid_output = 1'b1;
+                    thread_complete = 1'b0;
+                end;
+
+                3'b001: begin // SUB
+                    alu_in1 = register_file[regnum_1];
+                    alu_in2 = ~(register_file[regnum_2]);
+                    final_result = int_result;
+                    adder_cin = 1'b1;
+                    final_result = alu_in1 - alu_in2;
+                end;
+
+                3'b010: begin // MUL
+                    alu_in1 = register_file[regnum_1];
+                    alu_in2 = register_file[regnum_2];
+                    final_result = alu_in1 * alu_in2; // IN FUTURE ITERATIONS, CREATE AND USE A MULTIPLIER MODULE
+                    valid_output = 1'b1;
+                    thread_complete = 1'b0;
+                end;
+
+                3'b011: begin // UDIV
+                    alu_in1 = register_file[regnum_1];
+                    alu_in2 = register_file[regnum_2];
+                    final_result = int_result;
+                    if (alu_in2 != 0) begin
+                        final_result = alu_in1 / alu_in2; // IN FUTURE ITERATIONS, CREATE AND USE A DIVIDER MODULE
+                    end else begin
+                        final_result = 32'hFFFFFFFF; // Handle division by zero
+                    end
+                    valid_output = 1'b1;
+                    thread_complete = 1'b0;
+                end;
+
+                3'b100: begin // FADD
+                    alu_in1 = register_file[regnum_1];
+                    alu_in2 = register_file[regnum_2];
+                    final_result = float_result;
+                    valid_output = 1'b1;
+                    thread_complete = 1'b0;
+                end;
+
+                3'b101: begin // FSUB
+                    alu_in1 = register_file[regnum_1];
+                    alu_in2 = register_file[regnum_2];
+                    alu_in2[31] = ~alu_in2[31];
+                    final_result = float_result;
+                    valid_output = 1'b1;
+                    thread_complete = 1'b0;
+                end;
+
+                3'b111: begin
+                    thread_complete = 1'b1;
+                    final_result = 32'b0;
+                    valid_output = 1'b0;
+                end   
+            endcase  
         end
-        thread_complete <= 1'b1;
-        valid_output <= 1'b0;
-        result <= 32'b0;
     end
 
 endmodule
