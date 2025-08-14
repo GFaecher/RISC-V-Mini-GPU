@@ -72,11 +72,53 @@ module func_unit_tb ();
         end
 
         #20;
+        // Test type_instruction 3'b000 (Integer addition)
+        type_instruction = 3'b000;
+        regnum_1 = 5'd2;
+        regnum_2 = 5'd4;
+        dest_reg = 5'd5;
+        #20;
 
-        type_instruction = 3'b000; // Example: Integer addition
-        regnum_1 = 5'd1; // Register 1
-        regnum_2 = 5'd9; // Register 2
-        dest_reg = 5'd3; // Destination register 3
+        // Test type_instruction 3'b001 (Integer subtraction)
+        type_instruction = 3'b001;
+        regnum_1 = 5'd7;
+        regnum_2 = 5'd6;
+        dest_reg = 5'd8;
+        #20;
+
+        // Test type_instruction 3'b010 (Integer multiplication)
+        type_instruction = 3'b010;
+        regnum_1 = 5'd10;
+        regnum_2 = 5'd11;
+        dest_reg = 5'd12;
+        #20;
+
+        // Test type_instruction 3'b011 (Integer division)
+        type_instruction = 3'b011;
+        regnum_1 = 5'd14;
+        regnum_2 = 5'd15;
+        dest_reg = 5'd16;
+        #20;
+
+        // Test type_instruction 3'b100 (Floating-point addition)
+        type_instruction = 3'b100;
+        regnum_1 = 5'd18;
+        regnum_2 = 5'd19;
+        dest_reg = 5'd20;
+        #20;
+
+        // Test type_instruction 3'b101 (Floating-point subtraction)
+        type_instruction = 3'b101;
+        regnum_1 = 5'd21;
+        regnum_2 = 5'd22;
+        dest_reg = 5'd23;
+        #20;
+
+        // End with type_instruction 3'b111
+        type_instruction = 3'b111;
+        regnum_1 = 5'd0;
+        regnum_2 = 5'd0;
+        dest_reg = 5'd0;
         #20;
 
 

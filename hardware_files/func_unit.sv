@@ -35,7 +35,7 @@ module func_unit (
         .cout()
     );
 
-    always_ff @(posedge clk or posedge rst) begin
+    always_ff @(negedge clk or posedge rst) begin
         if (rst) begin
             final_result <= 32'b0;
             thread_complete <= 1'b1;

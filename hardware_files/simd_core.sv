@@ -6,13 +6,13 @@ module simd_core (
     input rst,
     input kernel_t kernel_in,
     input [31:0] instruction_from_imem, // COMES FROM SEPARATE IMEM. AKA ME IN TESTBENCH. TOP LEVEL INPUT
-    input [31:0] init_reg_data [0:31] [0:THREAD_COUNT-1], // REGISTER INITIALIZATION DATA. AKA ME FROM TESTBENCH TOP LEVEL INPUT
+    input logic [31:0] init_reg_data [THREAD_COUNT][32], // REGISTER INITIALIZATION DATA. AKA ME FROM TESTBENCH TOP LEVEL INPUT
 
-    output is_finished_out,
-    output [31:0] result_out [0:THREAD_COUNT-1], // TOP LEVEL OUTPUT
-    output [31:0] instruction_fetch, // TOP LEVEL OUTPUT
-    output [31:0] init_reg_data_fetch, // TOP LEVEL OUTPUT
-    output [3:0] finished_warp_id
+    output logic is_finished_out,
+    output logic [31:0] result_out [0:THREAD_COUNT-1], // TOP LEVEL OUTPUT
+    output logic [31:0] instruction_fetch, // TOP LEVEL OUTPUT
+    output logic [31:0] init_reg_data_fetch, // TOP LEVEL OUTPUT
+    output logic [3:0] finished_warp_id
 );
 
     logic stall;
@@ -20,7 +20,7 @@ module simd_core (
     logic [4:0] regnum_1, regnum_2, dest_reg;
     logic [5:0] shammt;
     logic [8:0] address;
-    logic thread_complete [0:THREAD_COUNT-1];
+    logic [0:THREAD_COUNT-1] thread_complete;
     logic [31:0] first_instruction;
     logic [31:0] pc_offset, address_out;
 
@@ -79,7 +79,8 @@ module simd_core (
                 .regnum_2(regnum_2),
                 .dest_reg(dest_reg),
                 .shammt(shammt),
-                .init_reg_data(init_reg_data[0:31][i]), // SLICE OUT THE i-th THREAD'S INIT DATA
+                .init_reg_data(init_reg_data[i]), // SLICE OUT THE i-th THREAD'S INIT DATA
+                .is_active((kernel_in.thread_count >= i + 1) ? 1'b1 : 1'b0),
                 .final_result(result_out[i]),
                 .thread_complete(thread_complete[i])
             );

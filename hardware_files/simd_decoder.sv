@@ -3,13 +3,13 @@ module simd_decoder (
     input [31:0] instruction,
 
 
-    output [2:0] type_instruction,
-    output [4:0] regnum_1,
-    output [4:0] regnum_2,
-    output [4:0] dest_reg,
+    output logic [2:0] type_instruction,
+    output logic [4:0] regnum_1,
+    output logic [4:0] regnum_2,
+    output logic [4:0] dest_reg,
     // output [11:0] immediate, IN FUTURE VERSIONS, INCLUDE IMMEDIATE INSTRUCTIONS
-    output [5:0] shammt,
-    output [8:0] address
+    output logic [5:0] shammt,
+    output logic [8:0] address
 
 );
 
