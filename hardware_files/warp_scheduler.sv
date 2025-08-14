@@ -6,7 +6,7 @@ module warp_scheduler (
     input logic launch_kernel,
     input logic [LOG2_THREAD_COUNT - 1:0] num_incoming_threads [0:NUM_SIMD_CORES - 1], // GPU TAKES IN MAX OF 8 THREADS PER SIMD CORE, AND HOLDS AT MAX 4 OF THOSE
     input logic [31:0] starting_pc [0:NUM_SIMD_CORES - 1],
-    input logic [3:0] finished_warp_id,
+    input logic [3:0] finished_warp_id [0:NUM_SIMD_CORES - 1], // INDICATES WHICH WARP HAS FINISHED
 
     output logic valid_kernel,
     output kernel_t kernel_out
@@ -142,9 +142,10 @@ module warp_scheduler (
         end
 
         endcase
-
-        if (finished_warp_id != 4'b1111) begin
-                open_warp_ids[finished_warp_id] <= 1'b0; // Mark warp ID as available
+        for (int j = 0; j < NUM_SIMD_CORES; j = j + 1) begin
+            if (finished_warp_id[j] != 4'b1111) begin
+                open_warp_ids[finished_warp_id[j]] <= 1'b0; // Mark warp ID as available
+            end
         end
 
         if ((i < (NUM_SIMD_CORES - 1) && !at_capacity && num_incoming_threads[i] > 0) ||

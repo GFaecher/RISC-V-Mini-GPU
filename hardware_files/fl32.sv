@@ -1,7 +1,7 @@
 module fl32 (
     input [31:0] in_0,
     input [31:0] in_1,
-    output [31:0] out
+    output logic [31:0] out
 );
 
     logic [7:0] exponent_0, exponent_1;
@@ -12,7 +12,7 @@ module fl32 (
 
     logic is_special_case, in0exp_eq_in1exp, in0exp_gt_in1exp, in0exp_lt_in1exp;
 
-    logic [7:0] exponent_diff_in0, exponent_diff_in1, exponent_twos_complement_in0, exponent_diff_out;
+    logic [7:0] exponent_subtractor_in0, exponent_subtractor_in1, exponent_subtractor_out;
 
     logic [23:0] mantissa_shift_in, mantissa_shift_out;
 
@@ -20,7 +20,7 @@ module fl32 (
 
     logic [23:0] needed_mantissa_inverted;
 
-    logic [23:0] ready_mantissa_0, ready_mantissa_1, added_mantissa;
+    logic [23:0] mantissa_adder_in0, mantissa_adder_in1, mantissa_adder_out, mantissa_adder_cin;
 
     logic final_mantissa_cout;
 
@@ -42,6 +42,10 @@ module fl32 (
 
     logic man0_gt_man1, man0_lt_man1;
 
+    logic [23:0] mantissa_normalized_out;
+
+    logic mantissa_adder_cout;
+
 
     assign exponent_0 = in_0[30:23];
     assign exponent_1 = in_1[30:23];
@@ -59,88 +63,55 @@ module fl32 (
     );
 
     add #(.WIDTH(8)) exponent_subtractor (
-        .in0(exponent_diff_in0),
-        .in1(exponent_diff_in1),
+        .in0(exponent_subtractor_in0),
+        .in1(exponent_subtractor_in1),
         .cin(1'b1),
-        .out(exponent_diff_out),
-        .cout() // cout is not used
-    );
-
-    add #(.WIDTH(8)) exponent_twos_complement (
-        .in0(exponent_twos_complement_in0),
-        .in1(8'b00000001),
-        .cin(1'b0),
-        .out(exponent_diff_in1),
+        .out(exponent_subtractor_out),
         .cout() // cout is not used
     );
 
     shiftright #(.WIDTH(24)) mantissa_shifter (
         .in0(mantissa_shift_in),
-        .shift_amount(exponent_diff_out),
+        .shift_amount(exponent_subtractor_out),
         .lsr(mantissa_shift_out)
     );
 
     add #(.WIDTH(24)) mantissa_adder (
-        .in0(ready_mantissa_0),
-        .in1(ready_mantissa_1),
-        .cin(1'b0),
-        .out(added_mantissa),
-        .cout() // cout is not used
+        .in0(mantissa_adder_in0),
+        .in1(mantissa_adder_in1),
+        .cin(mantissa_adder_cin),
+        .out(mantissa_adder_out),
+        .cout(mantissa_adder_cout) // cout is not used
     );
 
-    add #(.WIDTH(24)) mantissa_twos_complement (
-        .in0(needed_mantissa_inverted),
-        .in1(24'b1),
-        .cin(1'b0),
-        .out(ready_mantissa_1),
-        .cout() // cout is not used
-    );
+    // Intermediate wires for LZC and shiftleft
+    logic [5:0] num_leading_zeroes_stage;
+    logic found_one_stage;
+    logic [23:0] mantissa_normalized_stage;
 
-    add #(.WIDTH(24)) add_mantissas (
-        .in0(ready_mantissa_0),
-        .in1(ready_mantissa_1),
-        .cin(1'b0),
-        .out(added_mantissa),
-        .cout(final_mantissa_cout) // cout is not used
-    );
-
+    // Instantiate Leading Zero Counter
     LZC #(.WIDTH(24)) leading_one_detector (
-        .in(added_mantissa),
-        .count(num_leading_zeroes),
-        .found_one(found_one)
+        .in(mantissa_adder_out),
+        .count(num_leading_zeroes_stage),
+        .found_one(found_one_stage)
     );
 
+    // Instantiate shiftleft normalizer
     shiftleft #(.WIDTH(24)) mantissa_normalizer (
-        .in0(added_mantissa),
-        .shift_amount(num_leading_zeroes),
-        .lsl(mantissa_shift_out)
+        .in0(mantissa_adder_out),
+        .shift_amount(num_leading_zeroes_stage),
+        .lsl(mantissa_normalized_stage)
     );
 
-    add #(.WIDTH(8)) cout_detected_adder (
+    add #(.WIDTH(8)) final_exponent_adjuster (
         .in0(aligned_exponent),
-        .in1(8'b1),
-        .cin(1'b0),
-        .out(cout_detected_final_exponent),
+        .in1(8'b0),
+        .cin(mantissa_adder_cout),
+        .out(final_exponent),
         .cout() // cout is not used
     );
 
-    add #(.WIDTH(5)) twos_complement_exponent_prep (
-        .in0(~num_leading_zeroes),
-        .in1(5'b1),
-        .cin(1'b0),
-        .out(twos_comp_num_leading_zeroes),
-        .cout() // cout is not used
-    );
-
-    add #(.WIDTH(8)) add_exp_with_leading_zeroes (
-        .in0(aligned_exponent),
-        .in1(twos_comp_num_leading_zeroes),
-        .cin(1'b0),
-        .out(adjusted_exponent),
-        .cout() // cout is not used
-    );
-
-    comparater #(.WIDTH(23)) mantissa_comparator (
+    comparator #(.WIDTH(23)) mantissa_comparator (
         .a(mantissa_0),
         .b(mantissa_1),
         .a_eq_b(),
@@ -180,14 +151,14 @@ module fl32 (
 
         if (!is_special_case) begin
             if (in0exp_gt_in1exp) begin
-                exponent_twos_complement_in0 = ~exponent_1;
-                exponent_diff_in0 = exponent_0;
+                exponent_subtractor_in0 = exponent_0;
+                exponent_subtractor_in1 = ~exponent_1;
             end else if (in0exp_lt_in1exp) begin
-                exponent_twos_complement_in0 = ~exponent_0;
-                exponent_diff_in0 = exponent_1;
+                exponent_subtractor_in0 = exponent_1;
+                exponent_subtractor_in1 = ~exponent_0;
             end else begin
-                exponent_twos_complement_in0 = 8'b00000000; // Equal exponents
-                exponent_diff_in0 = 8'b00000000;
+                exponent_subtractor_in0 = 8'b00000000; // Equal exponents
+                exponent_subtractor_in1 = 8'b11111111; // GIVES RESULT OF 0
             end
         
         /* STEP 3: SHIFT MANTISSA OF SMALLER NUMBER BY EXPONENT DIFFERENCE */
@@ -209,26 +180,42 @@ module fl32 (
         /* STEP 4: ADD THE MANTISSAS */
 
             if (sign_0 == sign_1) begin
-                ready_mantissa_0 = mantissa_0_shifted;
-                ready_mantissa_1 = mantissa_1_shifted;
+                mantissa_adder_in0 = mantissa_0_shifted;
+                mantissa_adder_in1 = mantissa_1_shifted;
+                mantissa_adder_cin = 1'b0;
             end else begin
                 if (in0exp_gt_in1exp) begin
-                    needed_mantissa_inverted = ~mantissa_1_shifted;
-                    ready_mantissa_0 = mantissa_0_shifted;
+                    mantissa_adder_in0 = mantissa_0_shifted;
+                    mantissa_adder_in1 = ~mantissa_1_shifted;
+                    mantissa_adder_cin = 1'b1;
                 end else if (in0exp_lt_in1exp) begin
-                    needed_mantissa_inverted = ~mantissa_0_shifted;
-                    ready_mantissa_0 = mantissa_1_shifted;
+                    mantissa_adder_in0 = mantissa_1_shifted;
+                    mantissa_adder_in1 = ~mantissa_0_shifted;
+                    mantissa_adder_cin = 1'b1;
                 end else begin
-                    needed_mantissa_inverted = 23'b0; // Equal exponents
-                    ready_mantissa_0 = mantissa_0_shifted;
+                    if (man0_gt_man1) begin
+                        mantissa_adder_in0 = mantissa_0_shifted;
+                        mantissa_adder_in1 = ~mantissa_1_shifted;
+                        mantissa_adder_cin = 1'b1;
+                    end else if (man0_lt_man1) begin
+                        mantissa_adder_in0 = mantissa_1_shifted;
+                        mantissa_adder_in1 = ~mantissa_0_shifted;
+                        mantissa_adder_cin = 1'b1;
+                    end else begin
+                        mantissa_adder_in0 = 23'b0;
+                        mantissa_adder_in1 = 23'b0;
+                        mantissa_adder_cin = 1'b0;
+                    end
                 end
             end
         /* STEP 5: NORMALIZE THE RESULT */
 
-            if (found_one) begin
-                final_mantissa = mantissa_shift_out[22:0];
+            if (mantissa_adder_cout) begin
+                final_mantissa = mantissa_adder_out[23:1]; // Shift right by 1
+            end else if (found_one_stage) begin
+                final_mantissa = mantissa_normalized_stage[22:0];
             end else begin
-                final_mantissa = added_mantissa[22:0];
+                final_mantissa = mantissa_adder_out[22:0]; // all zeros
             end
 
         /* STEP 6: FIND FINAL EXPONENT */
@@ -238,13 +225,7 @@ module fl32 (
             end else if (in0exp_lt_in1exp) begin
                 aligned_exponent = exponent_1;
             end else begin
-                aligned_exponent = exponent_0;
-            end
-
-            if (final_mantissa_cout) begin
-                final_exponent = cout_detected_final_exponent;
-            end else begin
-                final_exponent = adjusted_exponent;
+                aligned_exponent = exponent_0; // equal exponents
             end
 
         /* STEP 7: FIND SIGN OF NUMBER AND ASSEMBLE FINAL ANSWER*/
@@ -262,12 +243,10 @@ module fl32 (
                     end else if (man0_lt_man1) begin
                         out = {sign_1, final_exponent, final_mantissa};
                     end else begin
-                        out = 32'b0 // must be 0
+                        out = 32'b0; // must be 0
                     end
                 end
             end
-        end else begin
-            out = out;
         end
     end
 

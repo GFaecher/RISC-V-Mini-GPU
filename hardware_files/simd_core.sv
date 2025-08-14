@@ -79,7 +79,7 @@ module simd_core (
                 .regnum_2(regnum_2),
                 .dest_reg(dest_reg),
                 .shammt(shammt),
-                .init_reg_data(init_reg_data[:, i]),
+                .init_reg_data(init_reg_data[0:31][i]), // SLICE OUT THE i-th THREAD'S INIT DATA
                 .final_result(result_out[i]),
                 .thread_complete(thread_complete[i])
             );
