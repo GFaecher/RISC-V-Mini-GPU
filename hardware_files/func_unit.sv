@@ -38,7 +38,7 @@ module func_unit (
     always_ff @(negedge clk or posedge rst) begin
         if (rst) begin
             final_result <= 32'b0;
-            thread_complete <= 1'b1;
+            thread_complete <= 1'b0;
             for (int i = 0; i < 32; i = i + 1) begin
                 register_file[i] <= 32'b0; // Initialize registers to zero on reset
             end
@@ -50,12 +50,16 @@ module func_unit (
             if (type_instruction != 3'b110 && type_instruction != 3'b111) begin
                 register_file[dest_reg] <= alu_result;
                 final_result <= alu_result;
+                thread_complete <= 1'b0;
             end else if (type_instruction == 3'b110) begin
                 for (int i = 0; i < 32; i++) begin
                     register_file[i] <= init_reg_data[i];
                 end
-            end
-            thread_complete <= (type_instruction == 3'b111) ? 1'b1 : 1'b0;
+                thread_complete <= 1'b0;
+            end else if (type_instruction == 3'b111) begin
+                // Do nothing, just mark thread as complete
+                thread_complete <= 1'b1;
+                end
             end
         end
     end

@@ -28,14 +28,14 @@ module simd_core (
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            is_finished_out <= 1'b1;
+            is_finished_out <= 1'b0;
             instruction_fetch <= 32'b0;
             finished_warp_id <= 4'b1111; // Indicating no warp finished
             stall <= 1'b0;
             pc_offset <= 32'b0;
             for (int i = 0; i < THREAD_COUNT; i = i + 1) begin
                 result_out[i] <= 32'b0;
-                thread_complete[i] <= 1'b1; // Assume all threads are complete on reset
+                thread_complete[i] <= 1'b0; // Assume all threads are complete on reset
             end
         end else begin
             if (&thread_complete) begin

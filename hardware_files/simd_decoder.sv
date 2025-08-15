@@ -30,7 +30,7 @@ module simd_decoder (
         end else if (instruction[31:21] == 11'b10101010101) begin // IN FUTURE, LOOK AT BITS [20:12] FOR ADDRESS
             type_instruction = 3'b110; // SPECIAL LOAD INSTRUCTION
         end else begin
-            type_instruction = 3'b111; // Return Instruction
+            type_instruction = 3'b110; // Return Instruction
         end
 
         dest_reg = instruction[4:0];

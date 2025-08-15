@@ -51,7 +51,7 @@ module func_unit_tb ();
     initial begin
 
         rst = 1'b1;
-        type_instruction = 3'b111; // Example instruction type
+        type_instruction = 3'b110; // Example instruction type
         regnum_1 = 5'b11111; // Example register number 1
         regnum_2 = 5'b11111; // Example register number 2
         dest_reg = 5'b11111; // Example destination register

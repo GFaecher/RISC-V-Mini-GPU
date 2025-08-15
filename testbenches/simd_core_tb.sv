@@ -33,7 +33,7 @@ module simd_core_tb ();
     output [31:0] init_reg_data_fetch, // TOP LEVEL OUTPUT
     output [3:0] finished_warp_id */
 
-    initial begin clk = 1'b0; end
+    initial begin clk = 1'b1; end
     always #10 clk = ~clk; // Clock generation with a period of 10 time units
 
     initial begin
@@ -48,9 +48,9 @@ module simd_core_tb ();
         kernel_in.warp_id = 4'b1111; // Initialize warp ID
         kernel_in.thread_count = 0; // Initialize thread count
         kernel_in.start_pc = 32'b0; // Initialize starting PC
-        #5;
-        rst = 1'b0; // Release reset
         #15;
+        rst = 1'b0; // Release reset
+        #5;
 
         kernel_in.warp_id = 4'b0001; // Set warp ID for the test
         kernel_in.thread_count = 4; // Set thread count for the test
