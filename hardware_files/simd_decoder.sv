@@ -29,8 +29,10 @@ module simd_decoder (
             type_instruction = 3'b101; // FSUB instruction
         end else if (instruction[31:21] == 11'b10101010101) begin // IN FUTURE, LOOK AT BITS [20:12] FOR ADDRESS
             type_instruction = 3'b110; // SPECIAL LOAD INSTRUCTION
+        end else if (instruction[31:21] == 11'b11111111111) begin
+            type_instruction = 3'b111; // SPECIAL RETURN INSTRUCTION
         end else begin
-            type_instruction = 3'b000; // Return Instruction
+            type_instruction = 3'b000; // NOP instruction by default
         end
 
         dest_reg = instruction[4:0];

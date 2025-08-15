@@ -58,7 +58,6 @@ module simd_core_tb ();
         #20;
         instruction_from_imem = 32'b10101010101110011111000000000000;
         #20;
-        instruction_from_imem = 32'b10001011000000010000000001100000;
         for (int thread = 0; thread < THREAD_COUNT; thread++) begin
             for (int regist = 0; regist < 32; regist++) begin
                 case (thread)
@@ -71,6 +70,10 @@ module simd_core_tb ();
             end
         end
         #20;
+        instruction_from_imem = 32'b10001011000000010000000001100000;
+        #20;
+        instruction_from_imem = 32'b1111111111111111111111111111111111; // Special return instruction
+        #40;
 
 
         $finish;
