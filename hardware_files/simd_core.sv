@@ -37,25 +37,30 @@ module simd_core (
                 thread_complete[i] <= 1'b0; // Assume all threads are complete on reset
             end
         end else begin
-            if (&thread_complete) begin
-                is_finished_out <= 1'b1;
-                finished_warp_id <= kernel_in.warp_id;
-            end else begin
-                is_finished_out <= 1'b0;
-                finished_warp_id <= 4'b1111; // Indicating no warp finished
-                if (type_instruction == 3'b110) begin
-                    init_reg_data_fetch <= address_out;
-                    if (!stall) begin
-                        stall <= 1'b1;
+            if (kernel_in.thread_count > 0) begin
+                if (&thread_complete) begin
+                    is_finished_out <= 1'b1;
+                    finished_warp_id <= kernel_in.warp_id;
+                end else begin
+                    is_finished_out <= 1'b0;
+                    finished_warp_id <= 4'b1111; // Indicating no warp finished
+                    if (type_instruction == 3'b110) begin
+                        init_reg_data_fetch <= address_out;
+                        if (!stall) begin
+                            stall <= 1'b1;
+                        end else begin
+                            instruction_fetch <= kernel_in.start_pc + pc_offset;
+                            pc_offset <= pc_offset + 4;
+                        end
                     end else begin
+                        // Fetch the instruction from the kernel
                         instruction_fetch <= kernel_in.start_pc + pc_offset;
                         pc_offset <= pc_offset + 4;
                     end
-                end else begin
-                    // Fetch the instruction from the kernel
-                    instruction_fetch <= kernel_in.start_pc + pc_offset;
-                    pc_offset <= pc_offset + 4;
                 end
+            end else begin
+                is_finished_out <= 1'b0;
+                finished_warp_id <= 4'b1111; // Indicating no warp finished
             end
         end
     end
