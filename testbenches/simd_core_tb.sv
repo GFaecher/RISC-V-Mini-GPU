@@ -50,13 +50,28 @@ module simd_core_tb ();
         kernel_in.start_pc = 32'b0; // Initialize starting PC
         #15;
         rst = 1'b0; // Release reset
-        #5;
 
         kernel_in.warp_id = 4'b0001; // Set warp ID for the test
         kernel_in.thread_count = 4; // Set thread count for the test
         kernel_in.start_pc = 32'h1234_5678; // Set starting PC for the test
 
-        #60;
+        #20;
+        instruction_from_imem = 32'b10101010101110011111000000000000;
+        #20;
+        instruction_from_imem = 32'b10001011000000010000000001100000;
+        for (int thread = 0; thread < THREAD_COUNT; thread++) begin
+            for (int regist = 0; regist < 32; regist++) begin
+                case (thread)
+                    0: init_reg_data[thread][regist] = regist;        // 0,1,2,...
+                    1: init_reg_data[thread][regist] = regist * 2;    // 0,2,4,...
+                    2: init_reg_data[thread][regist] = regist * 3;    // 0,3,6,...
+                    3: init_reg_data[thread][regist] = regist * 5;    // 0,5,10,...
+                    default: init_reg_data[thread][regist] = 0;    // unused threads
+                endcase
+            end
+        end
+        #20;
+
 
         $finish;
     end

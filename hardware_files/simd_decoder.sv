@@ -15,14 +15,14 @@ module simd_decoder (
 
     always_comb begin
 
-        if (instruction[31:21] == 11'b10001011000) begin
-            type_instruction = 3'b000; // ADD instruction
+        if (instruction[31:21] == 11'b00000000000) begin
+            type_instruction = 3'b000; // NOP instruction
         end else if (instruction[31:21] == 11'b11001011000) begin
             type_instruction = 3'b001; // SUB instruction
         end else if (instruction[31:21] == 11'b10011011000) begin
             type_instruction = 3'b010; // MUL instruction
-        end else if (instruction[31:21] == 11'b10011010110) begin
-            type_instruction = 3'b011; // UDIV instruction
+        end else if (instruction[31:21] == 11'b10001011000) begin
+            type_instruction = 3'b011; // ADD instruction
         end else if (instruction[31:21] == 11'b00011110011 && instruction[15:10] == 6'b001010) begin
             type_instruction = 3'b100; // FADD instruction
         end else if (instruction[31:21] == 11'b00011110011 && instruction[15:10] == 6'b001110) begin
@@ -30,7 +30,7 @@ module simd_decoder (
         end else if (instruction[31:21] == 11'b10101010101) begin // IN FUTURE, LOOK AT BITS [20:12] FOR ADDRESS
             type_instruction = 3'b110; // SPECIAL LOAD INSTRUCTION
         end else begin
-            type_instruction = 3'b110; // Return Instruction
+            type_instruction = 3'b000; // Return Instruction
         end
 
         dest_reg = instruction[4:0];
@@ -43,10 +43,9 @@ module simd_decoder (
 
 
 /* IF OPCODE IS ___, then type_instruction is:
-    ADD: 10001011000 | 000
+    ADD: 10001011000 | 011
     SUB: 11001011000 | 001
     MUL: 10011011000 | 010
-   UDIV: 10011010110 | 011
    FADD: 00011110011. SHAMMT: 001010 | 100
    FSUB: 00011110011. SHAMMT: 001110 | 101
 */

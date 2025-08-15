@@ -72,7 +72,7 @@ module func_unit_tb ();
         end
 
         #20;
-        // Test type_instruction 3'b000 (Integer addition)
+        // Test type_instruction 3'b000 (NOP instruction)
         type_instruction = 3'b000;
         regnum_1 = 5'd2;
         regnum_2 = 5'd4;
@@ -93,7 +93,7 @@ module func_unit_tb ();
         dest_reg = 5'd12;
         #20;
 
-        // Test type_instruction 3'b011 (Integer division)
+        // Test type_instruction 3'b011 (Integer addition)
         type_instruction = 3'b011;
         regnum_1 = 5'd14;
         regnum_2 = 5'd15;

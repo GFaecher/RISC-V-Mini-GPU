@@ -1,25 +1,25 @@
 module func_unit (
-    input logic clk,
-    input logic rst,
+    input  logic clk,
+    input  logic rst,
 
-    input logic [2:0] type_instruction,
-    input logic [4:0] regnum_1,
-    input logic [4:0] regnum_2,
-    input logic [4:0] dest_reg,
-    input logic [5:0] shammt,
+    input  logic [2:0] type_instruction,
+    input  logic [4:0] regnum_1,
+    input  logic [4:0] regnum_2,
+    input  logic [4:0] dest_reg,
+    input  logic [5:0] shammt,
 
-    input logic [31:0] init_reg_data [0:31], // INITIAL DATA FOR THE REGISTER FILE
-    input logic is_active, // Indicates if the thread is active
+    input  logic [31:0] init_reg_data [0:31], // INITIAL DATA FOR THE REGISTER FILE
+    input  logic        is_active, // Indicates if the thread is active
 
     output logic [31:0] final_result,
-    output logic thread_complete
+    output logic        thread_complete
 );
 
     logic [31:0] register_file [0:31]; // 32 registers, each 32 bits wide
 
     logic [31:0] alu_in1, alu_in2;
     logic [31:0] int_result, float_result, alu_result;
-    logic adder_cin;
+    logic        adder_cin;
 
     fl32 floating_point_unit (
         .in_0(alu_in1),
@@ -35,35 +35,39 @@ module func_unit (
         .cout()
     );
 
-    always_ff @(negedge clk or posedge rst) begin
+    always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            final_result <= 32'b0;
+            final_result    <= 32'b0;
             thread_complete <= 1'b0;
             for (int i = 0; i < 32; i = i + 1) begin
-                register_file[i] <= 32'b0; // Initialize registers to zero on reset
+                register_file[i] <= 32'b0;
             end
         end else begin
             if (!is_active) begin
-                thread_complete <= 1'b1; // If thread is not active, mark as complete
+                thread_complete <= 1'b1;
             end else begin
                 final_result <= 32'b0;
-            if (type_instruction != 3'b110 && type_instruction != 3'b111) begin
-                register_file[dest_reg] <= alu_result;
-                final_result <= alu_result;
-                thread_complete <= 1'b0;
-            end else if (type_instruction == 3'b110) begin
-                for (int i = 0; i < 32; i++) begin
-                    register_file[i] <= init_reg_data[i];
+                if (type_instruction != 3'b110 &&
+                    type_instruction != 3'b111 &&
+                    type_instruction != 3'b000) begin
+                    // Normal ALU instruction (not NOP, not init, not end)
+                    register_file[dest_reg] <= alu_result;
+                    final_result <= alu_result;
+                    thread_complete <= 1'b0;
+                end else if (type_instruction == 3'b110) begin
+                    // Init registers
+                    for (int i = 0; i < 32; i++) begin
+                        register_file[i] <= init_reg_data[i];
+                    end
+                    thread_complete <= 1'b0;
+                end else if (type_instruction == 3'b111) begin
+                    // End thread
+                    thread_complete <= 1'b1;
                 end
-                thread_complete <= 1'b0;
-            end else if (type_instruction == 3'b111) begin
-                // Do nothing, just mark thread as complete
-                thread_complete <= 1'b1;
-                end
+                // NOP (3'b000) does nothing
             end
         end
     end
-
 
     always_comb begin
         alu_in1   = register_file[regnum_1];
@@ -72,9 +76,8 @@ module func_unit (
         alu_result = 32'b0;
 
         unique case (type_instruction)
-            3'b000: begin // ADD
-                adder_cin  = 1'b0;
-                alu_result = int_result;
+            3'b000: begin
+                // NOP → do nothing, alu_result remains 0
             end
             3'b001: begin // SUB
                 alu_in2    = ~alu_in2;
@@ -82,7 +85,10 @@ module func_unit (
                 alu_result = int_result;
             end
             3'b010: alu_result = alu_in1 * alu_in2;
-            3'b011: alu_result = (alu_in2 != 0) ?(alu_in1 / alu_in2) : 32'hFFFFFFFF;
+            3'b011: begin // Now integer ADD (was DIV)
+                adder_cin  = 1'b0;
+                alu_result = int_result;
+            end
             3'b100: alu_result = float_result;
             3'b101: begin
                 alu_in2[31] = ~alu_in2[31];
