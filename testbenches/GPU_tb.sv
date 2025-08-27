@@ -77,7 +77,7 @@ module GPU_tb();
         // Allow input of register data into first SIMD core
         for (int k = 0; k < 32; k = k + 1) begin
             for (int j = 0; j < THREAD_COUNT; j = j + 1) begin
-                init_reg_data[k][j][0] = 32'b3; 
+                init_reg_data[k][j][0] = 32'h3; 
             end
         end
         #20;
