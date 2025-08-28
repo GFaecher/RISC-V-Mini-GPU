@@ -22,7 +22,7 @@ simplicity).
 
 ### High-Level Architecture
 <p align="center">
-  <img src="gpuSchematic.png" alt="GPU Architecture Diagram" width="600"/>
+  <img src="README_assets/gpuSchematic.png" alt="GPU Architecture Diagram" width="600"/>
 </p>
 
 At a high level, the CPU sends data (threads) to the GPU for execution. The GPU 
@@ -47,7 +47,7 @@ execution begins on one of the **SIMD cores**.
   of low-level hardware design.
 
 <p align="center">
-  <img src="gpuSIMD.png" alt="SIMD Core Diagram" width="400"/>
+  <img src="README_assets/gpuSIMD.png" alt="SIMD Core Diagram" width="400"/>
 </p>
 
 ---
